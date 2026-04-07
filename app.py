@@ -1,55 +1,65 @@
 import streamlit as st
-from ultralytics import YOLOWorld
-import cv2
 import numpy as np
 from PIL import Image
+import cv2
+import os
 
-# 1. Page Configuration
-st.set_page_config(page_title="Onion Detector AI", page_icon="🧅")
+# Import YOLO after other basic imports to avoid conflict
+try:
+    from ultralytics import YOLOWorld
+except ImportError:
+    st.error("Ultralytics library missing. Please check requirements.txt")
 
-# 2. Load Model with Caching (ఎర్రర్స్ రాకుండా ఉండటానికి)
+# --- Page Config ---
+st.set_page_config(page_title="AI Ingredient Detector", page_icon="🧅")
+
+# --- Model Loading (Cached) ---
 @st.cache_resource
-def get_model():
-    # YOLOWorld model can detect custom objects like 'onion'
-    try:
-        model = YOLOWorld('yolov8s-world.pt')
-        model.set_classes(["onion"])
-        return model
-    except Exception as e:
-        st.error(f"Model Loading Error: {e}")
-        return None
+def load_onion_model():
+    # Using 's' (small) version for better balance between speed and accuracy
+    model = YOLOWorld('yolov8s-world.pt')
+    # Set the model to ONLY detect onions
+    model.set_classes(["onion"])
+    return model
 
-model = get_model()
+# Initialize model
+model = load_onion_model()
 
-# 3. User Interface
-st.title("🧅 Smart Onion Detector")
-st.write("కెమెరాను ఉపయోగించి ఉల్లిపాయను గుర్తించండి.")
+# --- UI Setup ---
+st.title("🧅 Onion Detector AI")
+st.write("ఈ అప్లికేషన్ మీ కెమెరాను ఉపయోగించి ఉల్లిపాయను గుర్తిస్తుంది.")
 
-# Camera Input
-img_file = st.camera_input("Take a photo of an onion")
+# Camera input
+img_file = st.camera_input("కెమెరా ముందు ఉల్లిపాయను ఉంచి ఫోటో తీయండి")
 
 if img_file is not None:
-    # Convert image for processing
+    # 1. Convert to PIL Image
     input_img = Image.open(img_file)
+    
+    # 2. Convert to Numpy array for YOLO
     img_array = np.array(input_img)
     
-    # Run AI Detection
-    if model:
-        with st.spinner('Analyzing...'):
-            results = model.predict(img_array, conf=0.3)
-            
-            # Draw results on the image
-            res_plotted = results[0].plot()
-            
-            # Display results
-            st.image(res_plotted, caption="Detection Result", use_column_width=True)
-            
-            # Check if onion found
-            if len(results[0].boxes) > 0:
-                st.success(f"✅ ఉల్లిపాయను గుర్తించాను! (Found {len(results[0].boxes)} onion/s)")
-            else:
-                st.warning("⚠️ ఉల్లిపాయ కనిపించడం లేదు. దయచేసి వెలుతురులో మళ్ళీ ప్రయత్నించండి.")
-    else:
-        st.error("Model could not be initialized.")
+    # 3. Run Detection
+    with st.spinner('Analyzing image...'):
+        # conf=0.3 means 30% confidence threshold
+        results = model.predict(img_array, conf=0.3)
+        
+        # 4. Visualization
+        # Plotting boxes on the image
+        res_plotted = results[0].plot()
+        
+        # Convert BGR (OpenCV default) to RGB for Streamlit display
+        res_rgb = cv2.cvtColor(res_plotted, cv2.COLOR_BGR2RGB)
+        
+        # 5. Display Result
+        st.image(res_rgb, caption="Processed Image", use_container_width=True)
+        
+        # Check if any onions were detected
+        if len(results[0].boxes) > 0:
+            st.success(f"✅ ఉల్లిపాయను గుర్తించాను! ({len(results[0].boxes)} found)")
+            st.balloons() # Victory animation!
+        else:
+            st.warning("⚠️ ఉల్లిపాయ కనిపించడం లేదు. మళ్ళీ ప్రయత్నించండి.")
 
-st.info("గమనిక: మొదటిసారి యాప్ ఓపెన్ అయినప్పుడు AI మోడల్ డౌన్‌లోడ్ అవ్వడానికి 1-2 నిమిషాలు పడుతుంది.")
+st.divider()
+st.info("గమనిక: మొదటిసారి రన్ అయ్యేటప్పుడు AI మోడల్ డౌన్‌లోడ్ అవ్వడానికి 1-2 నిమిషాలు పడుతుంది. ఓపిక పట్టండి.")
