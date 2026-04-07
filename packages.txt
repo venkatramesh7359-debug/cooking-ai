@@ -1,2 +1,0 @@
-libgl1
-libgli2.0-0
